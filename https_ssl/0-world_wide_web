@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Audits DNS configuration for a domain and its subdomains
+
+# Function to query DNS and format output
+check_record() {
+    # $1: domain, $2: subdomain
+    # We use 'dig' with +noall +answer to get clean output
+    # We use 'awk' to format the string as requested: "The subdomain X is a Y record and points to Z"
+    # shellcheck disable=SC2086
+    dig "$2.$1" +noall +answer | awk -v sub="$2" '{print "The subdomain " sub " is a " $4 " record and points to " $5}'
+}
+
+# Check if a specific subdomain was provided as the 2nd argument
+if [ "$#" -gt 1 ]; then
+    # If yes, check only that subdomain
+    check_record "$1" "$2"
+else
+    # If no 2nd argument, check the default list in the specific order
+    check_record "$1" "www"
+    check_record "$1" "lb-01"
+    check_record "$1" "web-01"
+    check_record "$1" "web-02"
+fi

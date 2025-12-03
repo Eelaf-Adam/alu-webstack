@@ -1,47 +1,19 @@
 # /etc/haproxy/2-redirect_http_to_https
-# HAProxy config to enforce HTTPS with SSL termination
 
-global
-    log /dev/log    local0
-    log /dev/log    local1 notice
-    chroot /var/lib/haproxy
-    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
-    stats timeout 30s
-    user haproxy
-    group haproxy
-    daemon
-    ssl-default-bind-ciphers ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256
-    ssl-default-bind-options no-sslv3
-
-defaults
-    log     global
-    mode    http
-    option  httplog
-    option  dontlognull
-    timeout connect 5000ms
-    timeout client  50000ms
-    timeout server  50000ms
-    errorfile 400 /etc/haproxy/errors/400.http
-    errorfile 403 /etc/haproxy/errors/403.http
-    errorfile 408 /etc/haproxy/errors/408.http
-    errorfile 500 /etc/haproxy/errors/500.http
-    errorfile 502 /etc/haproxy/errors/502.http
     errorfile 503 /etc/haproxy/errors/503.http
     errorfile 504 /etc/haproxy/errors/504.http
-
-# Frontend for HTTP - redirect all requests to HTTPS
-frontend http_front
+frontend http-in
     bind *:80
     mode http
     redirect scheme https code 301 if !{ ssl_fc }
 
-# Frontend for HTTPS - SSL termination
-frontend https_front
-    bind *:443 ssl crt /etc/ssl/private/haproxy.pem
-    default_backend web_servers
+frontend https-in
+    bind *:443 ssl crt /etc/letsencrypt/live/www.mdhieu.tech/mdhieu.pem
+    mode http
+    default_backend webservers
 
-# Backend - your two web servers
-backend web_servers
+backend webservers
     balance roundrobin
-    server web01 18.208.153.152:80 check
-    server web02 18.206.244.77:80 check
+    option forwardfor
+    server 6661-web-01 3.95.151.193:80 check
+    server 6661-web-02 3.88.39.61:80 check

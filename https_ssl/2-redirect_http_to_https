@@ -8,12 +8,12 @@ frontend http-in
     redirect scheme https code 301 if !{ ssl_fc }
 
 frontend https-in
-    bind *:443 ssl crt /etc/letsencrypt/live/www.mdhieu.tech/mdhieu.pem
+    bind *:443 ssl crt /etc/letsencrypt/live/www.eelaf.tech/mdhieu.pem
     mode http
     default_backend webservers
 
 backend webservers
     balance roundrobin
     option forwardfor
-    server 6661-web-01 3.95.151.193:80 check
-    server 6661-web-02 3.88.39.61:80 check
+    server 6826-web-01 3.95.151.193:80 check
+    server 6826-web-02 3.88.39.61:80 check

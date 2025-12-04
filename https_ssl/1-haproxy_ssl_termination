@@ -1,44 +1,22 @@
-#!/usr/bin/env bash
-# 1-haproxy_ssl_setup.sh
-# Installs HAProxy, sets up SSL termination using Certbot, and configures HAProxy with web-01 and web-02 backends
-
-# ====== CONFIGURE THESE VARIABLES ======
-DOMAIN="www.holberton.online"        # Your domain with 'www'
-EMAIL="youremail@example.com"        # Your email for Let's Encrypt
-WEB1_IP="3.95.151.193"             # IP of web-01
-WEB2_IP="3.88.39.61"              # IP of web-02
-HAPROXY_PEM="/etc/ssl/certs/haproxy.pem"
-# =====================================
-
-set -e
-
-echo "[*] Updating system and installing dependencies..."
-apt update
-apt install -y haproxy certbot
-
-echo "[*] Stopping HAProxy if running..."
-systemctl stop haproxy || pkill -f haproxy || true
-
-echo "[*] Obtaining SSL certificate for $DOMAIN..."
-certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
-
-echo "[*] Building combined PEM for HAProxy..."
-mkdir -p /etc/ssl/certs
-cat /etc/letsencrypt/live/$DOMAIN/privkey.pem /etc/letsencrypt/live/$DOMAIN/fullchain.pem > "$HAPROXY_PEM"
-chmod 644 "$HAPROXY_PEM"
-chown root:root "$HAPROXY_PEM"
-
-echo "[*] Writing HAProxy configuration..."
-cat > /etc/haproxy/haproxy.cfg <<EOL
+# Global settings
 global
-    log /dev/log local0
-    log /dev/log local1 notice
+    log /dev/log    local0
+    log /dev/log    local1 notice
     chroot /var/lib/haproxy
-    pidfile /var/run/haproxy.pid
-    maxconn 2000
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    stats timeout 30s
     user haproxy
     group haproxy
     daemon
+
+    # Default SSL material locations
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+
+    # TLS settings following best practices
+    ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+    ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+    ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
 
 defaults
     log     global
@@ -48,28 +26,30 @@ defaults
     timeout connect 5000ms
     timeout client  50000ms
     timeout server  50000ms
+    errorfile 400 /etc/haproxy/errors/400.http
+    errorfile 403 /etc/haproxy/errors/403.http
+    errorfile 408 /etc/haproxy/errors/408.http
+    errorfile 500 /etc/haproxy/errors/500.http
+    errorfile 502 /etc/haproxy/errors/502.http
+    errorfile 503 /etc/haproxy/errors/503.http
+    errorfile 504 /etc/haproxy/errors/504.http
 
-frontend http_front
+# HTTP frontend - listen on port 80, redirect all to HTTPS
+frontend mdhieu.tech-http-frontend
     bind *:80
+    # Redirect any HTTP traffic to HTTPS
     redirect scheme https code 301 if !{ ssl_fc }
 
-frontend https_front
-    bind *:443 ssl crt $HAPROXY_PEM
-    mode http
-    option httplog
-    default_backend web_servers
+# HTTPS frontend - listen on port 443 with SSL termination
+frontend eelaf.tech-https-frontend
+    bind *:443 ssl crt /etc/ssl/eelaf.tech.pem
+    # Add header to indicate HTTPS protocol to backend
+    http-request set-header X-Forwarded-Proto https
+    default_backend eelaf.tech-backend
 
-backend web_servers
-    mode http
+# Backend servers serving HTTP (unsecured) behind HAProxy
+backend eelaf.tech-backend
     balance roundrobin
-    option httpchk GET /
-    server web-01 $WEB1_IP:80 check
-    server web-02 $WEB2_IP:80 check
-EOL
-
-echo "[*] Enabling and starting HAProxy..."
-systemctl enable haproxy
-systemctl restart haproxy
-
-echo "[✓] HAProxy installed and configured with SSL termination!"
-echo "[✓] Test it with: curl -sI https://$DOMAIN"
+    option forwardfor
+    server 6826-web-01 3.95.151.193:80 check
+    server 6826-web-02 3.88.39.61:80 check
